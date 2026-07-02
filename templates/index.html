@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Engine Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        .glass { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    
+    <div class="glass max-w-4xl w-full rounded-2xl shadow-2xl p-8 space-y-8">
+        <div class="text-center border-b border-slate-700/50 pb-6">
+            <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-emerald-400">Focus Engine</h1>
+            <p class="text-slate-400 mt-2 text-sm font-medium" id="status-text">SYSTEM READY // CONFIGURE PARAMETERS</p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-6">
+            <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Days</label>
+                <input type="number" id="t-days" value="0" min="0" class="w-full bg-transparent text-4xl font-black text-white outline-none">
+            </div>
+            <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Hours</label>
+                <input type="number" id="t-hours" value="0" min="0" class="w-full bg-transparent text-4xl font-black text-white outline-none">
+            </div>
+            <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-700/50">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Minutes</label>
+                <input type="number" id="t-mins" value="30" min="0" class="w-full bg-transparent text-4xl font-black text-white outline-none">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="space-y-4">
+                <label class="block text-sm font-bold text-emerald-400 uppercase tracking-wider">Target Executables</label>
+                <div class="flex gap-2">
+                    <select id="app-dropdown" class="flex-1 bg-slate-900/80 border border-slate-700 rounded-lg px-4 py-3 text-sm outline-none text-slate-200">
+                        <option value="">Scanning environment...</option>
+                    </select>
+                    <button onclick="addAppFromDropdown()" class="bg-slate-700 hover:bg-emerald-600 px-5 py-3 rounded-lg text-white font-bold">+</button>
+                </div>
+                <div id="app-tags" class="flex flex-wrap gap-2 mt-4 h-40 overflow-y-auto custom-scrollbar p-2 bg-slate-900/30 rounded-xl border border-slate-800/50"></div>
+            </div>
+
+            <div class="space-y-4">
+                <label class="block text-sm font-bold text-blue-400 uppercase tracking-wider">Allowed Domains</label>
+                <div class="flex gap-2">
+                    <input type="text" id="site-input" placeholder="Paste URL (e.g., https://go.dev/tour/)" class="flex-1 bg-slate-900/80 border border-slate-700 rounded-lg px-4 py-3 text-sm outline-none text-white">
+                    <button onclick="addSite()" class="bg-slate-700 hover:bg-blue-600 px-5 py-3 rounded-lg text-white font-bold">+</button>
+                </div>
+                <div id="site-tags" class="flex flex-wrap gap-2 mt-4 h-40 overflow-y-auto custom-scrollbar p-2 bg-slate-900/30 rounded-xl border border-slate-800/50"></div>
+            </div>
+        </div>
+
+        <button id="main-btn" onclick="toggleLockdown()" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-900 font-black py-5 rounded-xl text-xl transition-all">
+            ENGAGE LOCKDOWN
+        </button>
+    </div>
+
+    <script>
+        let apps = ["Telegram.exe", "Discord.exe"];
+        let sites = ["go.dev", "*.go.dev", "google.com", "*.google.com", "<local>"]; 
+        let isActive = false;
+
+        function renderTags() {
+            const appContainer = document.getElementById('app-tags');
+            appContainer.innerHTML = apps.map(app => `
+                <div class="bg-slate-800/80 hover:bg-red-900/40 border border-slate-700 text-slate-200 px-3 py-2 rounded-lg text-sm font-semibold flex items-center cursor-pointer transition-all" onclick="removeApp('${app}')">
+                    ${app} <span class="ml-3 text-slate-500 font-bold">&times;</span>
+                </div>`).join('');
+            
+            const siteContainer = document.getElementById('site-tags');
+            siteContainer.innerHTML = sites.map(site => `
+                <div class="bg-slate-800/80 hover:bg-red-900/40 border border-slate-700 text-slate-200 px-3 py-2 rounded-lg text-sm font-semibold flex items-center cursor-pointer transition-all" onclick="removeSite('${site}')">
+                    ${site} <span class="ml-3 text-slate-500 font-bold">&times;</span>
+                </div>`).join('');
+        }
+
+        function removeApp(app) { apps = apps.filter(a => a !== app); renderTags(); }
+        function removeSite(site) { sites = sites.filter(s => s !== site); renderTags(); }
+
+        function addAppFromDropdown() {
+            const val = document.getElementById('app-dropdown').value;
+            if(val && !apps.includes(val)) { apps.push(val); renderTags(); }
+        }
+
+        function addSite() {
+            const input = document.getElementById('site-input');
+            let rawInput = input.value.trim();
+            if (!rawInput) return;
+            if (!rawInput.startsWith('http')) { rawInput = 'https://' + rawInput; }
+
+            try {
+                const urlObj = new URL(rawInput);
+                let domain = urlObj.hostname;
+                if (domain.startsWith('www.')) domain = domain.substring(4);
+                
+                if (!sites.includes(domain)) sites.push(domain);
+                if (!sites.includes("*." + domain)) sites.push("*." + domain);
+                
+                renderTags();
+                input.value = '';
+            } catch (e) { alert("Please enter a valid website address."); }
+        }
+
+        document.getElementById('site-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') addSite();
+        });
+
+        async function fetchRunningApps() {
+            try {
+                const res = await fetch('/api/apps');
+                const data = await res.json();
+                const quickSelect = ["Telegram.exe", "Discord.exe", "WhatsApp.exe", "Spotify.exe", "Steam.exe"];
+                const allOptions = [...new Set([...quickSelect, ...data.apps])].sort();
+                document.getElementById('app-dropdown').innerHTML = '<option value="">-- Select App --</option>' + 
+                    allOptions.map(a => `<option value="${a}">${a}</option>`).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function toggleLockdown() {
+            if (isActive) {
+                await fetch('/api/stop', { method: 'POST' });
+                window.location.reload();
+                return;
+            }
+
+            if (!sites.includes("<local>")) sites.push("<local>");
+
+            const payload = {
+                days: parseInt(document.getElementById('t-days').value) || 0,
+                hours: parseInt(document.getElementById('t-hours').value) || 0,
+                mins: parseInt(document.getElementById('t-mins').value) || 0,
+                apps: apps,
+                sites: sites.join(";")
+            };
+
+            const res = await fetch('/api/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            if (res.ok) {
+                updateUIState(true);
+                setTimeout(() => { window.location.href = "/portal"; }, 500);
+            }
+        }
+
+        function updateUIState(active) {
+            isActive = active;
+            const btn = document.getElementById('main-btn');
+            if (active) {
+                btn.innerText = "TERMINATE SESSION";
+                btn.className = "w-full bg-red-600 text-white font-black py-5 rounded-xl text-xl transition-all";
+                document.querySelectorAll('input, select').forEach(el => el.disabled = true);
+            }
+        }
+
+        fetchRunningApps();
+        renderTags();
+    </script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #020617; color: #f8fafc; font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
+        .glass { background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.05); }
+        .confetti { position: absolute; width: 10px; height: 10px; opacity: 0; pointer-events: none; }
+        @keyframes fall {
+            0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="min-h-screen p-8 flex flex-col items-center">
+    
+    <div id="timer-header" class="text-center mb-8 transition-all duration-1000">
+        <h1 class="text-sm font-bold tracking-[0.3em] text-slate-500 uppercase mb-2">Target Lock Remaining</h1>
+        <div id="countdown-display" class="text-7xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-500 font-mono tracking-tighter shadow-sm">
+            00:00:00
+        </div>
+    </div>
+
+    <div id="active-view" class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-8 transition-opacity duration-1000">
+        <div class="col-span-2 glass rounded-2xl p-8 shadow-2xl border-t-4 border-emerald-500">
+            <h2 class="text-3xl font-black text-emerald-400 mb-2">Safe Access Links</h2>
+            <p class="text-slate-400 mb-6 text-sm">All other network traffic is currently routed to the blackhole proxy.</p>
+            <div class="grid grid-cols-2 gap-4" id="link-container"></div>
+        </div>
+
+        <div class="glass rounded-2xl p-8 shadow-2xl border-t-4 border-red-500">
+            <h2 class="text-2xl font-black text-red-400 mb-6">Violation Log</h2>
+            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">Intercepted Apps</h3>
+            <div id="app-violations" class="space-y-2 mb-6 text-sm text-slate-300"></div>
+            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">Background / Web Intercepts</h3>
+            <div id="site-violations" class="space-y-2 text-sm text-slate-300"></div>
+        </div>
+    </div>
+
+    <div id="results-view" class="w-full max-w-4xl hidden glass rounded-3xl p-12 text-center border-2 border-emerald-500/50 shadow-[0_0_50px_rgba(16,185,129,0.2)] mt-8">
+        <h2 class="text-5xl font-black text-emerald-400 mb-4 animate-bounce">LOCKDOWN COMPLETE</h2>
+        <p class="text-xl text-slate-300 mb-10">Network restrictions have been lifted. Here is your raw data.</p>
+        
+        <div class="grid grid-cols-3 gap-6 mb-10" id="stats-container">
+            </div>
+
+        <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-700 text-left">
+            <h3 class="text-lg font-bold text-blue-400 mb-4">Historical Trajectory</h3>
+            <div id="comparison-text" class="text-slate-300 leading-relaxed font-medium text-lg"></div>
+        </div>
+        
+        <button onclick="window.location.href='/'" class="mt-10 bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-xl font-bold transition">Return to Config</button>
+    </div>
+
+    <script>
+        let isFinished = false;
+        let lastKnownHistory = [];
+
+        // Simple Confetti Generator
+        function fireConfetti() {
+            const colors = ['#10b981', '#3b82f6', '#ef4444', '#f59e0b', '#8b5cf6'];
+            for (let i = 0; i < 100; i++) {
+                let conf = document.createElement('div');
+                conf.className = 'confetti';
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                conf.style.animation = `fall ${Math.random() * 3 + 2}s linear forwards`;
+                conf.style.animationDelay = Math.random() * 2 + 's';
+                document.body.appendChild(conf);
+                setTimeout(() => conf.remove(), 5000);
+            }
+        }
+
+        function formatTime(seconds) {
+            const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+            const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            if (h === '00') return `${m}:${s}`;
+            return `${h}:${m}:${s}`;
+        }
+
+        function showResults(data) {
+            if(isFinished) return;
+            isFinished = true;
+            
+            document.getElementById('active-view').style.display = 'none';
+            document.getElementById('timer-header').style.display = 'none';
+            document.getElementById('results-view').style.display = 'block';
+            
+            fireConfetti();
+
+            // Calculate current session stats
+            const appBlocks = Object.values(data.violations.apps).reduce((a, b) => a + b, 0);
+            const siteBlocks = Object.values(data.violations.sites).reduce((a, b) => a + b, 0);
+            
+            document.getElementById('stats-container').innerHTML = `
+                <div class="p-6 bg-slate-800 rounded-xl">
+                    <div class="text-4xl font-black text-white mb-2">Finished</div>
+                    <div class="text-xs font-bold text-slate-500 uppercase tracking-widest">Status</div>
+                </div>
+                <div class="p-6 bg-slate-800 rounded-xl">
+                    <div class="text-4xl font-black text-red-400 mb-2">${appBlocks}</div>
+                    <div class="text-xs font-bold text-slate-500 uppercase tracking-widest">Apps Killed</div>
+                </div>
+                <div class="p-6 bg-slate-800 rounded-xl">
+                    <div class="text-4xl font-black text-blue-400 mb-2">${siteBlocks}</div>
+                    <div class="text-xs font-bold text-slate-500 uppercase tracking-widest">Network Blocks</div>
+                </div>
+            `;
+
+            // Calculate History (Blunt Comparison)
+            const history = data.history || [];
+            let compText = "";
+            
+            if (history.length < 2) {
+                compText = "This is your first completed session in the encrypted ledger. Build up more history to see your growth trajectory.";
+            } else {
+                // Remove the current one if it was just appended, or average past ones
+                const pastSessions = history.slice(0, -1);
+                const avgDuration = pastSessions.reduce((sum, s) => sum + s.duration, 0) / pastSessions.length;
+                const currentSession = history[history.length - 1];
+                
+                const diffMins = Math.round((currentSession.duration - avgDuration) / 60);
+                
+                if (diffMins > 0) {
+                    compText = `Solid work. You focused for <span class="text-emerald-400 font-bold">${diffMins} minutes longer</span> than your historical average.`;
+                } else if (diffMins < 0) {
+                    compText = `You survived this session, but it was <span class="text-red-400 font-bold">${Math.abs(diffMins)} minutes shorter</span> than your historical average. Consistency is required.`;
+                } else {
+                    compText = `You matched your historical average exactly. Maintain the baseline.`;
+                }
+                
+                compText += `<br><br><span class="text-sm text-slate-500">Your total system intercepted ${siteBlocks} background tracking and web requests during this window.</span>`;
+            }
+            
+            document.getElementById('comparison-text').innerHTML = compText;
+        }
+
+        async function updateDashboard() {
+            if (isFinished) return;
+            
+            try {
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+                
+                // Timer Logic
+                if (data.is_active) {
+                    const remaining = data.end_time - data.current_time;
+                    if (remaining <= 0) {
+                        showResults(data);
+                    } else {
+                        document.getElementById('countdown-display').innerText = formatTime(remaining);
+                    }
+                } else {
+                    // Backend says inactive but frontend isn't finished -> Session ended naturally
+                    showResults(data);
+                }
+
+                if(!isFinished) {
+                    // Render Safe Links
+                    const linkDiv = document.getElementById('link-container');
+                    const uniqueSites = [...new Set(data.whitelist.map(s => s.replace('*.', '')))].filter(s => s !== '<local>');
+                    linkDiv.innerHTML = uniqueSites.map(site => `
+                        <a href="https://${site}" target="_blank" class="block bg-slate-800 border border-slate-700 p-4 rounded-xl transition hover:border-emerald-500">
+                            <div class="text-emerald-400 font-bold">${site}</div>
+                            <div class="text-xs text-slate-500 mt-1">Click to open safely &rarr;</div>
+                        </a>`).join('');
+
+                    // Render Violations
+                    const appDiv = document.getElementById('app-violations');
+                    const apps = Object.entries(data.violations.apps);
+                    appDiv.innerHTML = apps.length ? apps.map(([name, count]) => `<div class="flex justify-between bg-red-900/20 p-2 rounded border border-red-900/30"><span>${name}</span> <span class="text-red-400 font-bold">Blocked ${count}x</span></div>`).join('') : '<div class="text-slate-600 italic">No apps killed yet.</div>';
+
+                    const siteDiv = document.getElementById('site-violations');
+                    const sites = Object.entries(data.violations.sites);
+                    // Sort sites by hit count so the worst offenders are at the top
+                    sites.sort((a, b) => b[1] - a[1]);
+                    siteDiv.innerHTML = sites.length ? sites.map(([name, count]) => `<div class="flex justify-between bg-red-900/20 p-2 rounded border border-red-900/30 gap-2"><span class="truncate">${name}</span> <span class="text-red-400 font-bold min-w-max">Hit ${count}x</span></div>`).join('') : '<div class="text-slate-600 italic">No network noise yet.</div>';
+                }
+            } catch (e) {
+                console.error("API Error");
+            }
+        }
+
+        // Run immediately, then poll every 1 second for smooth countdown
+        updateDashboard();
+        setInterval(updateDashboard, 1000);
+    </script>
+</body>
+</html>
